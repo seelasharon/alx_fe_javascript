@@ -1,3 +1,63 @@
+/**
+ * Automated test for sync and conflict resolution.
+ * Simulates local/remote changes, triggers sync, and checks results.
+ * Usage: window.runSyncConflictTest()
+ */
+async function runSyncConflictTest() {
+	const results = { ok: true, steps: [] };
+	// Backup current state
+	const backup = localStorage.getItem(LOCAL_STORAGE_KEY);
+	const origQuotes = quotes.map(q => ({ ...q }));
+	try {
+		// 1. Clear and add a local quote
+		quotes.length = 0;
+		localStorage.removeItem(LOCAL_STORAGE_KEY);
+		const localQ = { text: 'SyncTest Local', category: 'local' };
+		quotes.push({ ...localQ });
+		saveQuotesToLocalStorage();
+		results.steps.push({ name: 'add-local-quote', ok: quotes.length === 1 });
+
+		// 2. Simulate server providing a conflicting quote (same text, different category)
+		const serverQ = { text: 'SyncTest Local', category: 'server' };
+		// Patch fetchServerQuotes to return our test data for this run
+		const origFetchServerQuotes = window.fetchServerQuotes;
+		window.fetchServerQuotes = async () => [serverQ];
+
+		// 3. Run sync (should detect conflict)
+		await performSync();
+		const foundConflict = Array.isArray(window.pendingConflicts) && window.pendingConflicts.some(c => c.text === localQ.text);
+		results.steps.push({ name: 'detect-conflict', ok: foundConflict });
+
+		// 4. Accept server version via mergeServerQuotes
+		mergeServerQuotes([serverQ]);
+		const updated = quotes.find(q => q.text === localQ.text && q.category === 'server');
+		results.steps.push({ name: 'server-wins', ok: !!updated });
+
+		// 5. Add a new server-only quote and sync
+		const serverOnlyQ = { text: 'SyncTest Server Only', category: 'remote' };
+		window.fetchServerQuotes = async () => [serverQ, serverOnlyQ];
+		await performSync();
+		const foundServerOnly = quotes.some(q => q.text === serverOnlyQ.text);
+		results.steps.push({ name: 'add-server-quote', ok: foundServerOnly });
+
+		// 6. No data loss: all expected quotes present
+		const allPresent = quotes.some(q => q.text === localQ.text) && quotes.some(q => q.text === serverOnlyQ.text);
+		results.steps.push({ name: 'no-data-loss', ok: allPresent });
+
+		// Restore fetchServerQuotes
+		window.fetchServerQuotes = origFetchServerQuotes;
+		// Restore state
+		quotes.length = 0;
+		origQuotes.forEach(q => quotes.push({ ...q }));
+		if (backup === null) localStorage.removeItem(LOCAL_STORAGE_KEY); else localStorage.setItem(LOCAL_STORAGE_KEY, backup);
+		return results;
+	} catch (err) {
+		results.ok = false;
+		results.error = err.message;
+		return results;
+	}
+}
+window.runSyncConflictTest = runSyncConflictTest;
 // Quote storage: an array of { text, category }
 const quotes = [
 	{ text: "The only limit to our realization of tomorrow is our doubts of today.", category: "inspirational" },
@@ -699,6 +759,18 @@ function showSyncNotification(message, busy = false) {
 	box.style.display = 'block';
 	document.getElementById('syncMessage').textContent = message;
 	if (busy) box.style.background = '#fff8c4'; else box.style.background = '#e8ffd8';
+	// Also show in notification area
+	showNotification(message, busy ? 'info' : 'success');
+}
+
+function showNotification(message, type = 'info', timeout = 4000) {
+	const area = document.getElementById('notificationArea');
+	if (!area) return;
+	area.textContent = message;
+	area.style.display = 'block';
+	area.style.background = type === 'error' ? '#ffeaea' : (type === 'success' ? '#eaf6ff' : '#fff8c4');
+	area.style.color = type === 'error' ? '#a94442' : (type === 'success' ? '#1a3a5b' : '#665c00');
+	if (timeout > 0) setTimeout(() => { area.style.display = 'none'; }, timeout);
 }
 
 function showConflictPanel() {
@@ -726,6 +798,7 @@ function showConflictPanel() {
 				saveQuotesToLocalStorage();
 				populateCategories();
 				row.style.opacity = '0.5';
+				showNotification(`Conflict for "${c.text}" resolved: server version accepted.`, 'success');
 			});
 			const btnLocal = document.createElement('button');
 			btnLocal.textContent = 'Keep Local';
@@ -733,6 +806,7 @@ function showConflictPanel() {
 			btnLocal.addEventListener('click', () => {
 				// keep local: overwrite server by doing nothing locally but remove conflict
 				row.style.opacity = '0.5';
+				showNotification(`Conflict for "${c.text}" resolved: local version kept.`, 'info');
 			});
 			row.appendChild(t);
 			row.appendChild(local);
@@ -750,6 +824,7 @@ function closeConflictPanel() {
 	if (panel) panel.style.display = 'none';
 	// clear pending as we've shown them (user may have acted)
 	pendingConflicts = [];
+	showNotification('Conflict panel closed.', 'info');
 }
 
 
@@ -801,6 +876,22 @@ document.addEventListener('DOMContentLoaded', () => {
 	if (reviewBtn) reviewBtn.addEventListener('click', showConflictPanel);
 	const closeBtn = document.getElementById('closeConflictsBtn');
 	if (closeBtn) closeBtn.addEventListener('click', closeConflictPanel);
+	// Add resolve all buttons
+	const resolveAllServerBtn = document.getElementById('resolveAllServerBtn');
+	if (resolveAllServerBtn) resolveAllServerBtn.addEventListener('click', () => {
+		if (!pendingConflicts.length) return;
+		pendingConflicts.forEach((c) => { c.local.category = c.server.category; });
+		saveQuotesToLocalStorage();
+		populateCategories();
+		showNotification('All conflicts resolved: server versions accepted.', 'success');
+		closeConflictPanel();
+	});
+	const resolveAllLocalBtn = document.getElementById('resolveAllLocalBtn');
+	if (resolveAllLocalBtn) resolveAllLocalBtn.addEventListener('click', () => {
+		// Just close the panel, keeping local versions
+		showNotification('All conflicts resolved: local versions kept.', 'info');
+		closeConflictPanel();
+	});
 	// start automatic sync
 	startSync();
 	// fetch server data immediately

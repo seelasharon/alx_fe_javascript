@@ -14,18 +14,24 @@
 				<!-- Dynamically populated categories -->
 			</select>
 		</div>
-		<!-- Sync/Server notifications -->
-		<div id="syncStatus" style="background:#fff8c4;border:1px solid #f0e68c;padding:8px;margin-bottom:8px;display:none">
-			<strong id="syncMessage">Sync idle</strong>
-			<button id="reviewConflictsBtn" style="margin-left:12px;">Review Changes</button>
-			<span id="lastSync" style="float:right;font-size:0.9em;color:#666"></span>
-		</div>
+	<!-- Sync/Server notifications -->
+	<div id="syncStatus" style="background:#fff8c4;border:1px solid #f0e68c;padding:8px;margin-bottom:8px;display:none">
+		<strong id="syncMessage">Sync idle</strong>
+		<button id="reviewConflictsBtn" style="margin-left:12px;">Review Changes</button>
+		<span id="lastSync" style="float:right;font-size:0.9em;color:#666"></span>
+	</div>
+	<!-- General notification area -->
+	<div id="notificationArea" style="display:none;margin-bottom:8px;padding:8px;border:1px solid #b3d4fc;background:#eaf6ff;color:#1a3a5b"></div>
 
 		<!-- Conflict review panel (hidden) -->
 		<div id="conflictPanel" style="display:none;border:1px solid #ddd;padding:8px;margin-bottom:8px;background:#fafafa">
 			<h3>Server updates / conflicts</h3>
 			<div id="conflictList"></div>
-			<button id="closeConflictsBtn" style="margin-top:8px">Close</button>
+			<div style="margin-top:8px">
+				<button id="resolveAllServerBtn" style="background:#e0f7fa">Accept All Server Versions</button>
+				<button id="resolveAllLocalBtn" style="background:#ffe0b2;margin-left:8px">Keep All Local Versions</button>
+				<button id="closeConflictsBtn" style="margin-left:8px">Close</button>
+			</div>
 		</div>
 		<div id="quoteDisplay"></div>
 			<button id="newQuote">Show New Quote</button>
