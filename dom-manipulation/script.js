@@ -715,15 +715,17 @@ async function performSync() {
  * Fetch server quotes from the mock endpoint. Adapt shape to {text, category}.
  * This example maps posts -> quotes for demo purposes.
  */
-async function fetchServerQuotes() {
-  // Using JSONPlaceholder posts as demo data; map title -> text and body -> category (not realistic)
+async function fetchQuotesFromServer() {
+  // Using JSONPlaceholder posts as demo data
   const res = await fetch(MOCK_SERVER_URL + '?_limit=5');
-  if (!res.ok) throw new Error('failed to fetch server data');
+  if (!res.ok) throw new Error('Failed to fetch server data');
+
   const data = await res.json();
-  // Map to our quote shape. Titles become text, body word count defines category as demo.
+
+  // Map API data to your quote structure
   return data.map((p) => ({
     text: p.title,
-    category: (p.body || '').split(' ')[0] || 'server'
+    category: (p.body || '').split(' ')[0] || 'server',
   }));
 }
 
