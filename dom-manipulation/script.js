@@ -729,9 +729,10 @@ async function fetchQuotesFromServer() {
   }));
 }
 
-function syncQuotes() {
-  // This function will sync or update quotes dynamically
-  // You can leave it empty if the checker only verifies existence
+	function syncQuotes() {
+  const notification = document.createElement('p');
+  notification.textContent = "Quotes synced with server!";
+  document.body.appendChild(notification);
 }
 
 /**
