@@ -611,4 +611,155 @@ async function runFilterTests() {
 
 window.runFilterTests = runFilterTests;
 
+// --- Sync simulation and conflict handling ---
+const SYNC_INTERVAL_MS = 30 * 1000; // 30s for demo; adjust as needed
+const MOCK_SERVER_URL = 'https://jsonplaceholder.typicode.com/posts'; // placeholder; we'll adapt shape
+let syncTimer = null;
+let pendingConflicts = [];
+
+/**
+ * Start periodic syncing with the mock server.
+ */
+function startSync() {
+	if (syncTimer) clearInterval(syncTimer);
+	// initial sync
+	performSync();
+	syncTimer = setInterval(performSync, SYNC_INTERVAL_MS);
+	showSyncNotification('Sync started');
+}
+
+/**
+ * Perform a sync: fetch server quotes and merge with local storage (server wins on conflict).
+ */
+async function performSync() {
+	showSyncNotification('Checking server for updates...', true);
+	try {
+		const serverQuotes = await fetchServerQuotes();
+		const conflicts = mergeServerQuotes(serverQuotes);
+		if (conflicts && conflicts.length) {
+			pendingConflicts = pendingConflicts.concat(conflicts);
+			showSyncNotification(`Server provided ${serverQuotes.length} items; ${conflicts.length} conflicts detected`, false);
+			// show conflict UI button
+			document.getElementById('syncStatus').style.display = 'block';
+			document.getElementById('reviewConflictsBtn').style.display = 'inline-block';
+		} else {
+			showSyncNotification(`Server sync complete — ${serverQuotes.length} items processed`, false);
+		}
+		document.getElementById('lastSync').textContent = new Date().toLocaleTimeString();
+	} catch (err) {
+		showSyncNotification('Sync failed: ' + err.message, false);
+	}
+}
+
+/**
+ * Fetch server quotes from the mock endpoint. Adapt shape to {text, category}.
+ * This example maps posts -> quotes for demo purposes.
+ */
+async function fetchServerQuotes() {
+	// Using JSONPlaceholder posts as demo data; map title -> text and body -> category (not realistic)
+	const res = await fetch(MOCK_SERVER_URL + '?_limit=5');
+	if (!res.ok) throw new Error('failed to fetch server data');
+	const data = await res.json();
+	// Map to our quote shape. Titles become text, body word count defines category as demo.
+	return data.map((p) => ({ text: p.title, category: (p.body || '').split(' ')[0] || 'server' }));
+}
+
+/**
+ * Merge server-provided quotes into local `quotes` array. Server takes precedence.
+ * Returns a list of conflict objects when an item with same text exists but different category.
+ */
+function mergeServerQuotes(serverQuotes) {
+	const conflicts = [];
+	const localIndex = new Map(quotes.map((q) => [q.text, q]));
+	serverQuotes.forEach((sq) => {
+		const existing = localIndex.get(sq.text);
+		if (existing) {
+			if ((existing.category || '') !== (sq.category || '')) {
+				// conflict: server wins; record for review
+				conflicts.push({ text: sq.text, local: existing, server: sq });
+				// apply server change
+				existing.category = sq.category || 'uncategorized';
+			} else {
+				// identical — no action
+			}
+		} else {
+			// new item from server — add to local
+			quotes.push({ text: sq.text, category: sq.category || 'uncategorized' });
+		}
+	});
+
+	if (serverQuotes.length > 0) saveQuotesToLocalStorage();
+	if (conflicts.length) populateCategories();
+	return conflicts;
+}
+
+function showSyncNotification(message, busy = false) {
+	const box = document.getElementById('syncStatus');
+	if (!box) return;
+	box.style.display = 'block';
+	document.getElementById('syncMessage').textContent = message;
+	if (busy) box.style.background = '#fff8c4'; else box.style.background = '#e8ffd8';
+}
+
+function showConflictPanel() {
+	const panel = document.getElementById('conflictPanel');
+	const list = document.getElementById('conflictList');
+	if (!panel || !list) return;
+	list.innerHTML = '';
+	if (!pendingConflicts || pendingConflicts.length === 0) {
+		list.textContent = 'No conflicts.';
+	} else {
+		pendingConflicts.forEach((c, idx) => {
+			const row = document.createElement('div');
+			row.style.borderBottom = '1px solid #eee';
+			row.style.padding = '6px 0';
+			const t = document.createElement('div');
+			t.textContent = `"${c.text}"`;
+			const local = document.createElement('div');
+			local.textContent = `Local: ${c.local.category}`;
+			const server = document.createElement('div');
+			server.textContent = `Server: ${c.server.category}`;
+			const btnServer = document.createElement('button');
+			btnServer.textContent = 'Accept Server';
+			btnServer.addEventListener('click', () => {
+				c.local.category = c.server.category;
+				saveQuotesToLocalStorage();
+				populateCategories();
+				row.style.opacity = '0.5';
+			});
+			const btnLocal = document.createElement('button');
+			btnLocal.textContent = 'Keep Local';
+			btnLocal.style.marginLeft = '8px';
+			btnLocal.addEventListener('click', () => {
+				// keep local: overwrite server by doing nothing locally but remove conflict
+				row.style.opacity = '0.5';
+			});
+			row.appendChild(t);
+			row.appendChild(local);
+			row.appendChild(server);
+			row.appendChild(btnServer);
+			row.appendChild(btnLocal);
+			list.appendChild(row);
+		});
+	}
+	panel.style.display = 'block';
+}
+
+function closeConflictPanel() {
+	const panel = document.getElementById('conflictPanel');
+	if (panel) panel.style.display = 'none';
+	// clear pending as we've shown them (user may have acted)
+	pendingConflicts = [];
+}
+
+// Wire conflict UI buttons
+document.addEventListener('DOMContentLoaded', () => {
+	const reviewBtn = document.getElementById('reviewConflictsBtn');
+	if (reviewBtn) reviewBtn.addEventListener('click', showConflictPanel);
+	const closeBtn = document.getElementById('closeConflictsBtn');
+	if (closeBtn) closeBtn.addEventListener('click', closeConflictPanel);
+	// start automatic sync
+	startSync();
+});
+
 

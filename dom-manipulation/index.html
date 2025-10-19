@@ -14,6 +14,19 @@
 				<!-- Dynamically populated categories -->
 			</select>
 		</div>
+		<!-- Sync/Server notifications -->
+		<div id="syncStatus" style="background:#fff8c4;border:1px solid #f0e68c;padding:8px;margin-bottom:8px;display:none">
+			<strong id="syncMessage">Sync idle</strong>
+			<button id="reviewConflictsBtn" style="margin-left:12px;">Review Changes</button>
+			<span id="lastSync" style="float:right;font-size:0.9em;color:#666"></span>
+		</div>
+
+		<!-- Conflict review panel (hidden) -->
+		<div id="conflictPanel" style="display:none;border:1px solid #ddd;padding:8px;margin-bottom:8px;background:#fafafa">
+			<h3>Server updates / conflicts</h3>
+			<div id="conflictList"></div>
+			<button id="closeConflictsBtn" style="margin-top:8px">Close</button>
+		</div>
 		<div id="quoteDisplay"></div>
 			<button id="newQuote">Show New Quote</button>
 			<div id="quickAdd" style="margin-top:12px">
