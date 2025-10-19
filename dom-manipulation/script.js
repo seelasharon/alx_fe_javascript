@@ -219,7 +219,7 @@ function createAddQuoteForm() {
 	const form = document.createElement('form');
 	form.id = 'addQuoteForm';
 
-	const heading = document
+	const heading = document.createElement('h2');
 	heading.textContent = 'Add a new quote';
 
 	const textLabel = document.createElement('label');
@@ -752,7 +752,50 @@ function closeConflictPanel() {
 	pendingConflicts = [];
 }
 
-// Wire conflict UI buttons
+
+// --- Server Simulation using JSONPlaceholder ---
+const API_BASE = 'https://jsonplaceholder.typicode.com';
+
+// Fetch posts from JSONPlaceholder
+async function fetchServerData() {
+	try {
+		const response = await fetch(`${API_BASE}/posts?_limit=5`);
+		const data = await response.json();
+		// Display fetched data in #serverData
+		const container = document.getElementById('serverData');
+		if (container) {
+			container.innerHTML = '<h3>Server Posts</h3>';
+			data.forEach(post => {
+				const div = document.createElement('div');
+				div.className = 'server-post';
+				div.innerHTML = `<strong>${post.title}</strong><p>${post.body}</p>`;
+				container.appendChild(div);
+			});
+		}
+	} catch (err) {
+		console.error('Failed to fetch server data:', err);
+	}
+}
+
+// Post a new item to JSONPlaceholder
+async function postServerData(title, body) {
+	try {
+		const response = await fetch(`${API_BASE}/posts`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ title, body, userId: 1 })
+		});
+		const result = await response.json();
+		alert('Posted to server! ID: ' + result.id);
+	} catch (err) {
+		console.error('Failed to post data:', err);
+	}
+}
+
+// Periodic data fetching (every 10 seconds)
+setInterval(fetchServerData, 10000);
+
+// Initial fetch and UI wiring on page load
 document.addEventListener('DOMContentLoaded', () => {
 	const reviewBtn = document.getElementById('reviewConflictsBtn');
 	if (reviewBtn) reviewBtn.addEventListener('click', showConflictPanel);
@@ -760,6 +803,18 @@ document.addEventListener('DOMContentLoaded', () => {
 	if (closeBtn) closeBtn.addEventListener('click', closeConflictPanel);
 	// start automatic sync
 	startSync();
+	// fetch server data immediately
+	fetchServerData();
+	// Wire up post button for server simulation
+	const postBtn = document.getElementById('postToServerBtn');
+	if (postBtn) {
+		postBtn.addEventListener('click', () => {
+			// Post random data for demo
+			const title = 'Random Title ' + Math.floor(Math.random() * 1000);
+			const body = 'Random body content at ' + new Date().toLocaleTimeString();
+			postServerData(title, body);
+		});
+	}
 });
 
 
