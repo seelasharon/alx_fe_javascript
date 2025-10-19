@@ -8,6 +8,7 @@ const quotes = [
 // Storage keys
 const LOCAL_STORAGE_KEY = 'quotes';
 const SESSION_LAST_QUOTE_KEY = 'lastViewedQuote';
+const SELECTED_CATEGORY_KEY = 'selectedCategory';
 
 /**
  * Load quotes from localStorage if available and replace the contents
@@ -40,6 +41,7 @@ function saveQuotesToLocalStorage() {
 		console.warn('Failed to save quotes to localStorage:', err);
 	}
 }
+
 
 /**
  * Render a quote object into the #quoteDisplay element.
@@ -81,17 +83,126 @@ function renderQuote(quote) {
  * If there are no quotes, renders the empty state.
  */
 function showRandomQuote() {
-	if (quotes.length === 0) {
+	return showRandomQuoteByCategory(getSelectedCategory());
+}
+
+/**
+ * Get currently selected category from the UI select.
+ */
+function getSelectedCategory() {
+	const sel = document.getElementById('categoryFilter');
+	if (!sel) return 'all';
+	return sel.value || 'all';
+}
+
+/**
+ * Show a random quote from a given category (or all).
+ */
+function showRandomQuoteByCategory(category = 'all') {
+	const pool = category === 'all' ? quotes : quotes.filter((q) => (q.category || 'uncategorized') === category);
+	if (!pool || pool.length === 0) {
 		renderQuote(null);
 		return null;
 	}
-
-	const idx = Math.floor(Math.random() * quotes.length);
-	const q = quotes[idx];
+	const idx = Math.floor(Math.random() * pool.length);
+	const q = pool[idx];
 	renderQuote(q);
-	// last viewed saved inside renderQuote; return q
 	return q;
 }
+
+/**
+ * Collect the set of categories from quotes and return them sorted.
+ */
+function getCategories() {
+	const set = new Set();
+	quotes.forEach((q) => set.add((q.category || 'uncategorized')));
+	return Array.from(set).sort();
+}
+
+/**
+ * Populate the #categoryFilter select with current categories.
+ */
+function populateCategoryFilter() {
+	// Backwards-compatible wrapper: call populateCategories
+	populateCategories();
+}
+
+/**
+ * Populate the #categoryFilter select with current categories and restore last selection.
+ * Saves selection to localStorage when changed.
+ */
+function populateCategories() {
+	const sel = document.getElementById('categoryFilter');
+	if (!sel) return;
+
+	// remember current selection to try to restore it after repopulating
+	const previous = localStorage.getItem(SELECTED_CATEGORY_KEY) || sel.value || 'all';
+
+	// build options
+	sel.innerHTML = '<option value="all">All Categories</option>';
+	getCategories().forEach((cat) => {
+		const opt = document.createElement('option');
+		opt.value = cat;
+		opt.textContent = cat;
+		sel.appendChild(opt);
+	});
+
+	// restore previous selection if available
+	if (Array.from(sel.options).some((o) => o.value === previous)) sel.value = previous; else sel.value = 'all';
+
+	// ensure selection change persists and triggers filtering
+	sel.removeEventListener('change', onCategoryChangeBound);
+	sel.addEventListener('change', onCategoryChangeBound);
+}
+
+// small helper bound function so we can remove/add listener reliably
+function onCategoryChange(e) {
+	const val = e.target.value || 'all';
+	try {
+		localStorage.setItem(SELECTED_CATEGORY_KEY, val);
+	} catch (err) {
+		// ignore
+	}
+	filterQuotes();
+}
+const onCategoryChangeBound = onCategoryChange.bind(window);
+
+/**
+ * Programmatically set the selected category in the UI and persist it.
+ * Also triggers filtering so changes are reflected in real-time.
+ */
+function setSelectedCategory(category) {
+	const sel = document.getElementById('categoryFilter');
+	if (!sel) return;
+	const wanted = category || 'all';
+	// if the option exists, set it; otherwise, repopulate then set
+	if (Array.from(sel.options).some((o) => o.value === wanted)) {
+		sel.value = wanted;
+	} else {
+		// repopulate categories (this will restore previous selection too)
+		populateCategories();
+		if (Array.from(sel.options).some((o) => o.value === wanted)) sel.value = wanted;
+	}
+
+	try {
+		localStorage.setItem(SELECTED_CATEGORY_KEY, sel.value || 'all');
+	} catch (err) {
+		// ignore
+	}
+
+	// Apply filter immediately
+	filterQuotes();
+}
+
+/**
+ * Handler for when the category filter changes.
+ */
+function filterQuotes() {
+	const cat = getSelectedCategory();
+	// show a random quote within the selected category
+	showRandomQuoteByCategory(cat);
+}
+
 
 /**
  * Create and insert a form into the DOM that allows adding new quotes.
@@ -163,6 +274,9 @@ function createAddQuoteForm() {
 		quotes.push(newQuote);
 			// persist new quotes
 			saveQuotesToLocalStorage();
+			// refresh category filter and select the new category
+			populateCategories();
+			setSelectedCategory(category);
 		status.textContent = 'Quote added!';
 		status.style.color = 'green';
 
@@ -183,6 +297,9 @@ document.addEventListener('DOMContentLoaded', () => {
 	// Create the add-quote form and show an initial quote
 	// Load persisted quotes from localStorage (if any)
 	loadQuotesFromLocalStorage();
+
+	// Populate category filter based on loaded quotes and restore selection
+	populateCategories();
 
 	createAddQuoteForm();
 
@@ -240,6 +357,10 @@ function addQuote() {
 
 		// persist updated quotes list
 		saveQuotesToLocalStorage();
+
+		// refresh category filter and select the new category
+		populateCategories();
+		setSelectedCategory(category);
 
 	// Clear inputs
 	textEl.value = '';
@@ -306,6 +427,9 @@ function importFromJsonFile(event) {
 				alert(`Imported ${added} new quote(s).`);
 				// Show the first added quote
 				renderQuote(quotes[quotes.length - 1]);
+				// refresh category filter and select the first imported category (if available)
+				populateCategories();
+				if (valid && valid.length > 0) setSelectedCategory(valid[0].category || 'uncategorized');
 			} else {
 				alert('No new quotes were added (all were duplicates).');
 			}
@@ -328,6 +452,8 @@ function addQuoteDirect(text, category = 'uncategorized') {
 	const newQ = { text: text.trim(), category: category || 'uncategorized' };
 	quotes.push(newQ);
 	saveQuotesToLocalStorage();
+	populateCategories();
+	try { setSelectedCategory(newQ.category); } catch (e) {}
 	return newQ;
 }
 
@@ -349,7 +475,11 @@ function importFromJsonText(jsonText) {
 			added++;
 		}
 	});
-	if (added > 0) saveQuotesToLocalStorage();
+	if (added > 0) {
+		saveQuotesToLocalStorage();
+		populateCategories();
+		if (valid && valid.length > 0) setSelectedCategory(valid[0].category || 'uncategorized');
+	}
 	return added;
 }
 
@@ -419,5 +549,66 @@ window.addQuoteDirect = addQuoteDirect;
 window.importFromJsonText = importFromJsonText;
 window.getExportJsonString = getExportJsonString;
 window.runQuoteTests = runQuoteTests;
+
+/**
+ * Run filter-specific checks:
+ * - populateCategories populates options
+ * - selection is persisted to localStorage
+ * - showRandomQuote respects the selection after reload simulation
+ */
+async function runFilterTests() {
+	const results = { ok: true, steps: [] };
+	try {
+		// backup
+		const storeBackup = localStorage.getItem(LOCAL_STORAGE_KEY);
+		const selBackup = localStorage.getItem(SELECTED_CATEGORY_KEY);
+
+		// prepare
+		localStorage.removeItem(LOCAL_STORAGE_KEY);
+		localStorage.removeItem(SELECTED_CATEGORY_KEY);
+		quotes.length = 0;
+
+		// add quotes with two categories
+		addQuoteDirect('FilterTest A1', 'catA');
+		addQuoteDirect('FilterTest B1', 'catB');
+
+		// repopulate the select
+		populateCategories();
+		const sel = document.getElementById('categoryFilter');
+		if (!sel) throw new Error('category select missing');
+		const options = Array.from(sel.options).map((o) => o.value);
+		if (!options.includes('catA') || !options.includes('catB')) throw new Error('categories not populated');
+		results.steps.push({ name: 'populate-categories', ok: true, options });
+
+		// select catA and persist
+		setSelectedCategory('catA');
+		if (localStorage.getItem(SELECTED_CATEGORY_KEY) !== 'catA') throw new Error('selected category not persisted');
+		results.steps.push({ name: 'persist-selection', ok: true });
+
+		// simulate reload: clear in-memory but reload from storage
+		quotes.length = 0;
+		loadQuotesFromLocalStorage();
+		populateCategories();
+		// ensure selection restored from storage
+		const restored = localStorage.getItem(SELECTED_CATEGORY_KEY);
+		if (restored !== 'catA') throw new Error('selection not restored after reload');
+		results.steps.push({ name: 'restore-selection', ok: true, restored });
+
+		// ensure showRandomQuote respects filter (should pick from catA only)
+		const shown = showRandomQuote();
+		if (!shown || shown.category !== 'catA') throw new Error('showRandomQuote did not respect selected category');
+		results.steps.push({ name: 'filter-respected', ok: true, shown });
+
+		// restore backups
+		if (storeBackup === null) localStorage.removeItem(LOCAL_STORAGE_KEY); else localStorage.setItem(LOCAL_STORAGE_KEY, storeBackup);
+		if (selBackup === null) localStorage.removeItem(SELECTED_CATEGORY_KEY); else localStorage.setItem(SELECTED_CATEGORY_KEY, selBackup);
+
+		return results;
+	} catch (err) {
+		return { ok: false, error: err.message };
+	}
+}
+
+window.runFilterTests = runFilterTests;
 
 
