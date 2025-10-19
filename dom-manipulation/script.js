@@ -909,3 +909,4 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 
+window.fetchServerQuotes = fetchServerQuotes;
