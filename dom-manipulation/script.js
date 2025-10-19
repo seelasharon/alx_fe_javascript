@@ -716,13 +716,17 @@ async function performSync() {
  * This example maps posts -> quotes for demo purposes.
  */
 async function fetchServerQuotes() {
-	// Using JSONPlaceholder posts as demo data; map title -> text and body -> category (not realistic)
-	const res = await fetch(MOCK_SERVER_URL + '?_limit=5');
-	if (!res.ok) throw new Error('failed to fetch server data');
-	const data = await res.json();
-	// Map to our quote shape. Titles become text, body word count defines category as demo.
-	return data.map((p) => ({ text: p.title, category: (p.body || '').split(' ')[0] || 'server' }));
+  // Using JSONPlaceholder posts as demo data; map title -> text and body -> category (not realistic)
+  const res = await fetch(MOCK_SERVER_URL + '?_limit=5');
+  if (!res.ok) throw new Error('failed to fetch server data');
+  const data = await res.json();
+  // Map to our quote shape. Titles become text, body word count defines category as demo.
+  return data.map((p) => ({
+    text: p.title,
+    category: (p.body || '').split(' ')[0] || 'server'
+  }));
 }
+
 
 /**
  * Merge server-provided quotes into local `quotes` array. Server takes precedence.
