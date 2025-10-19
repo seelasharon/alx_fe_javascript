@@ -219,7 +219,7 @@ function createAddQuoteForm() {
 	const form = document.createElement('form');
 	form.id = 'addQuoteForm';
 
-	const heading = document.createElement('h2');
+	const heading = document
 	heading.textContent = 'Add a new quote';
 
 	const textLabel = document.createElement('label');
